@@ -120,9 +120,16 @@ typedef alignas(16) struct {
 } BeamformerDASUBO;
 static_assert((sizeof(BeamformerDASUBO) & 15) == 0, "UBO size must be a multiple of 16");
 
+#define HIGH_PASS_FILTER_LENGTH 20
+typedef alignas(16) struct {
+	float filter_coefficients[HIGH_PASS_FILTER_LENGTH];
+} BeamformerHighPassFilterUBO;
+static_assert((sizeof(BeamformerHighPassFilterUBO) & 15) == 0, "UBO size must be a multiple of 16");
+
 /* TODO(rnp): need 1 UBO per filter slot */
 #define BEAMFORMER_COMPUTE_UBO_LIST \
-	X(DAS,        BeamformerDASUBO,    das)
+	X(DAS,        BeamformerDASUBO,            das) \
+	X(HighPassFilter, BeamformerHighPassFilterUBO, high_pass_filter)
 
 #define X(k, ...) BeamformerComputeUBOKind_##k,
 typedef enum {BEAMFORMER_COMPUTE_UBO_LIST BeamformerComputeUBOKind_Count} BeamformerComputeUBOKind;

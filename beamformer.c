@@ -40,6 +40,14 @@ global f32 dt_for_frame;
 #define MIN_MAX_MIPS_LEVEL_UNIFORM_LOC 1
 #define SUM_PRESCALE_UNIFORM_LOC       1
 
+/* NOTE: High pass filter coefficients - paste your 20 coefficients here */
+/* Coefficients are applied in order: coeff[0] to oldest frame, coeff[19] to newest frame */
+read_only local_persist f32 high_pass_filter_coefficients[HIGH_PASS_FILTER_LENGTH] = {
+	/* Paste your filter coefficients here, one per line: */
+	0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+	0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+};
+
 #ifndef _DEBUG
 #define start_renderdoc_capture(...)
 #define end_renderdoc_capture(...)
@@ -1137,6 +1145,16 @@ do_compute_shader(BeamformerCtx *ctx, BeamformerComputePlan *cp, BeamformerFrame
 			}
 			glBindImageTexture(1 + i, input_frame->texture, 0, GL_TRUE, 0, GL_READ_ONLY, gl_kind);
 		}
+
+		/* NOTE: Upload filter coefficients to UBO */
+		for (u32 i = 0; i < HIGH_PASS_FILTER_LENGTH; i++) {
+			cp->high_pass_filter_ubo_data.filter_coefficients[i] = high_pass_filter_coefficients[i];
+		}
+		glNamedBufferSubData(cp->ubos[BeamformerComputeUBOKind_HighPassFilter], 0,
+		                     sizeof(BeamformerHighPassFilterUBO), &cp->high_pass_filter_ubo_data);
+		
+		/* NOTE: Bind filter coefficients uniform buffer at binding 21 */
+		glBindBufferBase(GL_UNIFORM_BUFFER, 21, cp->ubos[BeamformerComputeUBOKind_HighPassFilter]);
 
 		/* NOTE: Dispatch compute shader */
 		u32 dispatch_x = (u32)ceil_f32((f32)frame->dim.x / DAS_LOCAL_SIZE_X);

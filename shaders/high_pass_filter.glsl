@@ -40,11 +40,13 @@ layout(TEXTURE_KIND, binding = 19) readonly restrict uniform image3D u_in_img_18
 layout(TEXTURE_KIND, binding = 20) readonly restrict uniform image3D u_in_img_19;
 
 /* NOTE: FIR high pass filter coefficients for 20-tap filter
- * This implements a simple high pass: output = current - mean(previous frames)
- * For a more sophisticated filter, coefficients can be designed using
- * standard FIR design methods (e.g., windowed sinc, Parks-McClellan)
+ * Filter coefficients are provided via uniform buffer
  */
 #define FILTER_LENGTH 20
+
+layout(std140, binding = 21) uniform filter_coefficients_block {
+	float filter_coefficients[FILTER_LENGTH];
+};
 
 SAMPLE_TYPE sample_frame(int frame_index, ivec3 voxel)
 {
@@ -79,25 +81,18 @@ void main()
 	if (!all(lessThan(voxel, imageSize(u_out_img))))
 		return;
 
-	/* NOTE: High pass filter implementation
-	 * Simple approach: output = current_frame - mean(all_frames)
-	 * This removes the DC/low-frequency component
+	/* NOTE: FIR high pass filter implementation
+	 * Apply filter coefficients to frames using weighted sum:
+	 * output = sum(coeff[i] * frame[i]) for i = 0 to FILTER_LENGTH-1
 	 * 
 	 * The frames are bound in temporal order (oldest to newest):
-	 * - binding 1 = oldest frame
-	 * - binding 20 = newest frame (current frame)
+	 * - binding 1 = oldest frame (index 0)
+	 * - binding 20 = newest frame (index 19)
 	 */
-	SAMPLE_TYPE sum = SAMPLE_TYPE(0);
+	SAMPLE_TYPE result = SAMPLE_TYPE(0);
 	for (int i = 0; i < FILTER_LENGTH; i++) {
-		sum += sample_frame(i, voxel);
+		result += filter_coefficients[i] * sample_frame(i, voxel);
 	}
-	SAMPLE_TYPE mean = sum / float(FILTER_LENGTH);
-
-	/* NOTE: The most recent frame is at index 19 (binding 20, last in buffer)
-	 * High pass: subtract mean from current frame
-	 */
-	SAMPLE_TYPE current = sample_frame(19, voxel);
-	SAMPLE_TYPE result = current - mean;
 
 	imageStore(u_out_img, voxel, OUTPUT_TYPE_CAST(result));
 }
